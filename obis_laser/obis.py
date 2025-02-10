@@ -6,6 +6,8 @@ from serial import Serial
 from enum import Enum
 from time import sleep
 
+from typing import Union
+
 # Define StrEnums if we are using an earlier Python version.
 if sys.version_info < (3,11):
     class StrEnum(str, Enum):
@@ -227,7 +229,7 @@ class Obis:
         return status
 
     @cdrh.setter
-    def cdrh(self, status: BoolStrEnum | str):
+    def cdrh(self, status: Union[BoolStrEnum, str]):
         value = status.value if type(status) == BoolStrEnum else status
         self.set_operational_setting(OperationalCmd.EMISSION_DELAY,
                                      value)
