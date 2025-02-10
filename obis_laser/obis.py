@@ -10,6 +10,8 @@ from time import sleep
 if sys.version_info < (3,11):
     class StrEnum(str, Enum):
         pass
+else :
+    from enum import StrEnum
 
 # Collect various sets of commands into enums.
 # Commands are SCPI-based
@@ -225,7 +227,7 @@ class Obis:
         return status
 
     @cdrh.setter
-    def cdrh(self, status: BoolStrEnum or str):
+    def cdrh(self, status: BoolStrEnum | str):
         value = status.value if type(status) == BoolStrEnum else status
         self.set_operational_setting(OperationalCmd.EMISSION_DELAY,
                                      value)
