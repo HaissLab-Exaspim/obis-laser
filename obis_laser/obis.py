@@ -165,16 +165,33 @@ OBIS_COM_SETUP = \
 
     }
 
+
+class SerialContext:
+
+    def __init__(self, port : str | Serial, obis_com_setup : dict = {}):
+        self.port = port
+        self.obis_com_setup = obis_com_setup
+
+    def __enter__(self):
+        self.serial = Serial(self.port, **OBIS_COM_SETUP) if type(self.port) != Serial else self.port
+        self.serial.reset_output_buffer()
+        self.serial.reset_input_buffer()
+        return self
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.serial.close()
+
 class Obis:
 
     def __init__(self, port, prefix=None):
         """Constructor. Connect to the device."""
 
         self.prefix = f'{prefix} ' if prefix is not None else ''
-        self.ser = Serial(port, **OBIS_COM_SETUP) if type(port) != Serial else port
-        # Flush OS buffers.
-        self.ser.reset_output_buffer()
-        self.ser.reset_input_buffer()
+        self.port = port
+        # self.ser = Serial(port, **OBIS_COM_SETUP) if type(port) != Serial else port
+        # # Flush OS buffers.
+        # self.ser.reset_output_buffer()
+        # self.ser.reset_input_buffer()
 
     @property  # TODO: make a @cached_property
     def wavelength(self):
@@ -186,6 +203,13 @@ class Obis:
         reply = self.get_state_setting(SystemStateQuery.SOURCE_TEMPERATURE_BASEPLATE)
         return float(reply.strip('C'))
 
+    def is_enabled(self):
+        reply = self.get_operational_setting(OperationalQuery.LASER_OUTPUT_STATE)
+        print("Obis laser is currently : ", reply)
+        if reply == BoolStrEnum.ON.value :
+            return True
+        return False
+    
     def enable(self):
         """Enable the laser once it is ready (i.e: not warming up or faulted).
 
@@ -193,6 +217,8 @@ class Obis:
               the laser is warming up, the setting will take effect after
               warmup is complete.
         """
+        if self.is_enabled() :
+            return
         return self.set_operational_setting(OperationalCmd.LASER_OUTPUT_STATE,
                                             BoolStrEnum.ON.value)
 
@@ -201,6 +227,8 @@ class Obis:
 
         Note: this command does not provide any feeback.
         """
+        if not self.is_enabled() :
+            return
         return self.set_operational_setting(OperationalCmd.LASER_OUTPUT_STATE,
                                             BoolStrEnum.OFF.value)
 
@@ -312,8 +340,9 @@ class Obis:
         cmd_bytes = f"{self.prefix} {cmd.value} {cmd_arg_val}\r\n".encode('ascii') if self.prefix != None \
             else f"{cmd.value} {cmd_arg_val}\r\n".encode('ascii')
         # print(f"Writing: {cmd_bytes}")
-        self.ser.write(cmd_bytes)
-        conf = self.ser.readline().decode('utf8').rstrip('\r\n')
+        with SerialContext(self.port) as context :
+            context.serial.write(cmd_bytes)
+            conf = context.serial.readline().decode('utf8').rstrip('\r\n')
         assert conf == 'OK', \
             "Error: did not receive an OK when attempting to " \
             f"write: {repr(cmd_bytes)}\r\n" \
@@ -326,10 +355,11 @@ class Obis:
         cmd_bytes = f"{self.prefix} {cmd.value}\r\n".encode('ascii') if self.prefix != None \
             else f"{cmd.value}\r\n".encode('ascii')
         # print(f"sending: {repr(cmd_bytes)}")
-        self.ser.write(cmd_bytes)
-        val = self.ser.readline().decode('utf8').rstrip('\r\n')
-        #print(f"received: {val}")
-        conf = self.ser.readline().decode('utf8').rstrip('\r\n')
+        with SerialContext(self.port) as context :
+            context.serial.write(cmd_bytes)
+            val = context.serial.readline().decode('utf8').rstrip('\r\n')
+            #print(f"received: {val}")
+            conf = context.serial.readline().decode('utf8').rstrip('\r\n')
         assert conf == 'OK', \
             "Error: did not receive an OK when attempting to " \
             f"write: {repr(cmd_bytes)}.\r\n" \
